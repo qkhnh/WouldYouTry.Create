@@ -5,18 +5,57 @@ import styles from './Sidebar.module.css'
 
 interface SidebarProps {
   savedRecipes: Dish[]
+  approvedRecipes: Dish[]
   onRemoveSaved?: (index: number) => void
+  onRemoveApproved?: (index: number) => void
   onNavigateToAuth?: () => void
   user?: User | null
   profile?: CafeProfile | null
 }
 
-export function Sidebar({ savedRecipes, onRemoveSaved, onNavigateToAuth, user, profile }: SidebarProps) {
+export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemoveApproved, onNavigateToAuth, user, profile }: SidebarProps) {
   const accountLabel = user
     ? (profile?.cafe_name ?? user.email ?? 'Your account')
     : 'Sign in or create an account'
+  
+  const handleAccountClick = () => {
+    console.log('[SIDEBAR] Account clicked, calling onNavigateToAuth')
+    if (onNavigateToAuth) {
+      onNavigateToAuth()
+    }
+  }
+  
   return (
     <aside className={styles.sidebar} aria-label="Sidebar">
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>Approved recipes</h2>
+        {approvedRecipes.length === 0 ? (
+          <p className={styles.empty}>No approved recipes yet. Approve a suggestion to add it to your menu.</p>
+        ) : (
+          <ul className={styles.list}>
+            {approvedRecipes.map((recipe, index) => (
+              <li key={`approved-${recipe.name}-${index}`}>
+                <div className={styles.item}>
+                  <span className={styles.itemName} title={recipe.name}>
+                    {recipe.name}
+                  </span>
+                  {onRemoveApproved && (
+                    <button
+                      type="button"
+                      className={styles.removeBtn}
+                      onClick={() => onRemoveApproved(index)}
+                      title="Remove from approved"
+                      aria-label={`Remove ${recipe.name} from approved`}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <div className={styles.section}>
         <h2 className={styles.sectionTitle}>Saved recipes</h2>
         {savedRecipes.length === 0 ? (
@@ -52,8 +91,8 @@ export function Sidebar({ savedRecipes, onRemoveSaved, onNavigateToAuth, user, p
           className={`${styles.accountBlock} ${onNavigateToAuth ? styles.accountBlockClickable : ''}`}
           role={onNavigateToAuth ? 'button' : undefined}
           tabIndex={onNavigateToAuth ? 0 : undefined}
-          onClick={onNavigateToAuth}
-          onKeyDown={onNavigateToAuth ? (e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToAuth() } : undefined}
+          onClick={handleAccountClick}
+          onKeyDown={onNavigateToAuth ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleAccountClick() } : undefined}
         >
           <p className={styles.accountText}>{accountLabel}</p>
           <span className={styles.accountLink}>

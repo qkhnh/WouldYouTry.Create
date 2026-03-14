@@ -21,36 +21,51 @@ export function buildPrompt(
   const ingredientList = ingredients
     .map((i) => `- ${i.name}${i.qty ? ` (${i.qty}${i.unit ? ' ' + i.unit : ''})` : ''}${i.atRisk ? ' [AT RISK]' : ''}`)
     .join('\n')
+  
+  const menuItemsFormatted = profile?.menu_items?.length
+    ? profile.menu_items.map((item) => {
+        const ingredientsStr = item.ingredients
+          .map((ing) => `${ing.name} ${ing.quantity}${ing.unit}`)
+          .join(', ')
+        return `${item.name}: ${ingredientsStr}`
+      }).join('\n')
+    : ''
+
   const profileContext = profile
     ? `Cafe: ${profile.cafe_name ?? 'unnamed'} | Style: ${profile.cuisine_type ?? 'general'}\n`
+    : ''
+
+  const menuItemsSection = menuItemsFormatted
+    ? `\nCurrent menu items:\n${menuItemsFormatted}\n`
     : ''
 
   return `You are a chef assistant for a cafe. Suggest 3 creative off-menu dishes using the available ingredients.
 
 ${profileContext}Available equipment: ${equipment}
-Pantry staples available: ${pantry}
-
+Pantry staples available: ${pantry}${menuItemsSection}
 Today's leftover ingredients:
 ${ingredientList}
 
 ${notes ? `Chef notes: ${notes}\n` : ''}
-Return exactly 3 dish suggestions. For each dish include: name, description, ingredient list with quantities, equipment required, and a brief rationale.`
+Respond with ONLY a valid JSON array of exactly 3 objects. Each object must have:
+- name (string)
+- description (string)
+- ingredients (array of { name, quantity, unit })
+- equipmentRequired (array of strings)
+- rationale (string)
+- offMenuNote (string, optional)
+No markdown, no explanation, just the JSON array.`
 }
 
-// ── callLLM (mock) ─────────────────────────────────────────────────────────────
-// Replace the body of this function with a real fetch() to your LLM endpoint.
+// ── mockCallLLM (fallback when no API key) ─────────────────────────────────────
 
-export async function callLLM(
-  _prompt: string,
-  ingredients: SubmittedIngredient[]
-): Promise<Dish[]> {
+function mockCallLLM(_prompt: string, ingredients: SubmittedIngredient[]): Dish[] {
   const names = ingredients.map((i) => i.name)
   const first = names[0] ?? 'vegetables'
   const second = names[1] ?? 'herbs'
-  const third = names[2] ?? 'eggs'
   const nameStr = names.slice(0, 3).join(', ')
 
-  const mockDishes: Dish[] = [
+  return [
     {
       name: `${first.charAt(0).toUpperCase() + first.slice(1)} Hash`,
       description: `A pan-fried hash built around ${nameStr}. Crispy edges, soft centre — ideal as a brunch special.`,
@@ -96,32 +111,129 @@ export async function callLLM(
       rationale: `Bowl format lets you scale up or down with whatever quantity is left of each ingredient.`,
       offMenuNote: 'Off-menu special — use while supplies last.',
     },
-    {
-      name: `${third.charAt(0).toUpperCase() + third.slice(1)} & ${second.charAt(0).toUpperCase() + second.slice(1)} Special`,
-      description: `A simple composed plate featuring ${nameStr}. Great as a limited daily special.`,
-      ingredients: ingredients.slice(0, 4).map((i) => ({
-        name: i.name,
-        quantity: parseFloat(i.qty) || 1,
-        unit: i.unit || 'pcs',
-        atRisk: false,
-      })),
-      equipmentRequired: ['stovetop', 'grill'],
-      wasteScore: 0,
-      portionsToClear: 0,
-      rationale: `Pairs high-value at-risk items together to create a dish with strong menu appeal.`,
-      offMenuNote: 'Off-menu special — use while supplies last.',
-    },
   ]
+}
 
-  return mockDishes
+// ── callLLM ────────────────────────────────────────────────────────────────────
+
+export async function callLLM(
+  prompt: string,
+  ingredients: SubmittedIngredient[]
+): Promise<string | Dish[]> {
+  const apiKey = import.meta.env.VITE_GLM_API_KEY as string | undefined
+  if (!apiKey?.trim()) {
+    return mockCallLLM(prompt, ingredients)
+  }
+
+  const baseUrl = (import.meta.env.VITE_GLM_BASE_URL as string) ?? 'https://open.bigmodel.cn/api/paas/v4'
+  const model = (import.meta.env.VITE_GLM_MODEL as string) ?? 'glm-4-flash'
+
+  const maxRetries = 3
+  const baseDelay = 2000 // 2 seconds
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = baseDelay * Math.pow(2, attempt - 1)
+      console.log(`GLM API retry ${attempt + 1}/${maxRetries}, waiting ${delay}ms...`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a chef assistant. Return only valid JSON.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 4000,
+      }),
+    })
+
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error('GLM API Error:', res.status, errorText)
+
+      // Retry on rate limit (429) or server errors (5xx)
+      if ((res.status === 429 || res.status >= 500) && attempt < maxRetries - 1) {
+        console.log(`GLM API rate limited or server error, will retry...`)
+        continue
+      }
+
+      throw new Error(`GLM API error: ${res.status} - ${errorText}`)
+    }
+
+    const data = (await res.json()) as unknown
+    console.log('GLM API Response:', JSON.stringify(data, null, 2))
+
+    const typedData = data as {
+      choices?: Array<{ message?: { content?: string } }>
+      error?: { message?: string; code?: number; type?: string }
+    }
+
+    if (typedData.error) {
+      console.error('GLM API Error:', typedData.error)
+      throw new Error(`GLM API error: ${typedData.error.message} (code: ${typedData.error.code})`)
+    }
+
+    if (!typedData.choices || typedData.choices.length === 0) {
+      throw new Error('GLM API error: No choices in response')
+    }
+
+    const content = typedData.choices[0]?.message?.content
+    if (!content) {
+      console.error('GLM API Response - Missing content:', typedData)
+      throw new Error('GLM API error: No content returned in message')
+    }
+    return content
+  }
+
+  throw new Error('GLM API error: Max retries exceeded')
+}
+
+// ── normalizeDish ──────────────────────────────────────────────────────────────
+
+interface RawDish {
+  name?: string
+  description?: string
+  ingredients?: Array<{ name?: string; quantity?: number; unit?: string }>
+  equipmentRequired?: string[]
+  rationale?: string
+  offMenuNote?: string
+}
+
+function normalizeDish(raw: RawDish): Dish {
+  const ingredients = (raw.ingredients ?? []).map((ing) => ({
+    name: String(ing.name ?? ''),
+    quantity: typeof ing.quantity === 'number' ? ing.quantity : parseFloat(String(ing.quantity ?? 1)) || 1,
+    unit: String(ing.unit ?? 'pcs'),
+    atRisk: false,
+  }))
+  return {
+    name: String(raw.name ?? 'Unnamed dish'),
+    description: String(raw.description ?? ''),
+    ingredients,
+    equipmentRequired: Array.isArray(raw.equipmentRequired) ? raw.equipmentRequired.map(String) : ['stovetop'],
+    wasteScore: 0,
+    portionsToClear: 0,
+    rationale: String(raw.rationale ?? ''),
+    offMenuNote: raw.offMenuNote != null ? String(raw.offMenuNote) : undefined,
+  }
 }
 
 // ── parseResponse ──────────────────────────────────────────────────────────────
-// In mock mode this is an identity function.
-// When callLLM returns a real JSON tool_use response, parse it here.
 
-export function parseResponse(raw: Dish[]): Dish[] {
-  return raw
+export function parseResponse(raw: string | Dish[]): Dish[] {
+  if (Array.isArray(raw)) return raw
+  const cleaned = raw.trim().replace(/^```json\n?|\n?```$/g, '')
+  const parsed = JSON.parse(cleaned) as unknown
+  if (!Array.isArray(parsed)) throw new Error('Expected JSON array')
+  return parsed.map((item: RawDish) => normalizeDish(item))
 }
 
 // ── flagAtRiskIngredients ──────────────────────────────────────────────────────
