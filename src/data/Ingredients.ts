@@ -94,9 +94,14 @@ export const ALL_INGREDIENTS = INGREDIENT_CATEGORIES.flatMap((cat) =>
   cat.items.map((name) => ({ name, category: cat.id }))
 );
 
-// Popular / featured ingredients for brunch & cafe (subset for "Featured" tab)
+// Popular / featured ingredients for demo "Featured" tab
 export const FEATURED_INGREDIENT_NAMES = [
-  "Eggs", "Tomato", "Basil", "Chicken Breast", "Bacon", "Spinach", "Mushroom",
-  "Onion", "Garlic", "Feta", "Mozzarella", "Lemon", "Olive Oil", "Pasta",
-  "Salmon", "Avocado", "Potato", "Cheddar", "Cream", "Butter",
+  "Cabbage",
+  "Chicken Breast",
+  "Steak",
+  "Pork Belly",
+  "Bacon",
+  "Eggs",
+  "Avocado",
+  "Mushroom",
 ];

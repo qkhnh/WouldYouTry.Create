@@ -1,5 +1,9 @@
-import { useState, useMemo } from "react";
-import { INGREDIENT_CATEGORIES, ALL_INGREDIENTS } from "../data/Ingredients";
+import { useRef, useState, useMemo } from "react";
+import {
+  INGREDIENT_CATEGORIES,
+  ALL_INGREDIENTS,
+  FEATURED_INGREDIENT_NAMES,
+} from "../data/Ingredients";
 import type { Unit } from "../lib/parseVoiceInput";
 import styles from "./IngredientSelector.module.css";
 
@@ -36,32 +40,108 @@ export default function IngredientSelector({
   onUpdateUnit,
 }: Props) {
   const [search, setSearch] = useState<string>("");
-  const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [activeCategory, setActiveCategory] = useState<string>("featured");
   const [showTray, setShowTray] = useState<boolean>(false);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  const isPointerDownRef = useRef<boolean>(false);
+  const isDraggingRef = useRef<boolean>(false);
+  const dragStartXRef = useRef<number>(0);
+  const dragStartScrollLeftRef = useRef<number>(0);
 
   const selectedCount = Object.keys(selected).length;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return ALL_INGREDIENTS.filter(({ name, category }) => {
-      const matchCat = activeCategory === "all" || category === activeCategory;
-      const matchSearch = !q || name.toLowerCase().includes(q);
-      return matchCat && matchSearch;
-    });
-  }, [search, activeCategory]);
 
-  const handleCategoryClick = (id: string): void => {
-    setActiveCategory(id);
-    setSearch("");
-  };
+    let base = ALL_INGREDIENTS;
+
+    if (activeCategory === "featured") {
+      const featuredSet = new Set(
+        FEATURED_INGREDIENT_NAMES.map((n) => n.toLowerCase())
+      );
+      base = ALL_INGREDIENTS.filter(({ name }) =>
+        featuredSet.has(name.toLowerCase())
+      );
+    } else {
+      base = ALL_INGREDIENTS.filter(
+        ({ category }) => category === activeCategory
+      );
+    }
+
+    return base.filter(({ name }) => !q || name.toLowerCase().includes(q));
+  }, [search, activeCategory]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setSearch(e.target.value);
-    setActiveCategory("all");
+  };
+
+  const handleTabsMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
+    const el = tabsRef.current;
+    if (!el) return;
+
+    isPointerDownRef.current = true;
+    isDraggingRef.current = false;
+    dragStartXRef.current = e.clientX;
+    dragStartScrollLeftRef.current = el.scrollLeft;
+  };
+
+  const handleTabsMouseLeave = (): void => {
+    isPointerDownRef.current = false;
+    isDraggingRef.current = false;
+  };
+
+  const handleTabsMouseUp = (): void => {
+    isPointerDownRef.current = false;
+  };
+
+  const handleTabsMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
+    const el = tabsRef.current;
+    if (!el || !isPointerDownRef.current) return;
+
+    const deltaX = e.clientX - dragStartXRef.current;
+
+    // If the pointer has moved enough, treat as a drag (not a click).
+    if (!isDraggingRef.current && Math.abs(deltaX) > 5) {
+      isDraggingRef.current = true;
+    }
+
+    if (isDraggingRef.current) {
+      el.scrollLeft = dragStartScrollLeftRef.current - deltaX;
+      e.preventDefault();
+    }
+  };
+
+  const handleTabsWheel = (e: React.WheelEvent<HTMLDivElement>): void => {
+    const el = tabsRef.current;
+    if (!el) return;
+
+    // If the user's gesture is primarily vertical, map it to horizontal scrolling.
+    const dominantDelta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (dominantDelta === 0) return;
+
+    el.scrollLeft += dominantDelta;
+    e.preventDefault();
+  };
+
+  const handleTabsKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    const el = tabsRef.current;
+    if (!el) return;
+
+    const step = 120;
+    if (e.key === "ArrowRight") {
+      el.scrollLeft += step;
+      e.preventDefault();
+    } else if (e.key === "ArrowLeft") {
+      el.scrollLeft -= step;
+      e.preventDefault();
+    }
   };
 
   const activeCategoryLabel =
-    INGREDIENT_CATEGORIES.find((c) => c.id === activeCategory)?.label ?? "All ingredients";
+    activeCategory === "featured"
+      ? "Featured ingredients"
+      : INGREDIENT_CATEGORIES.find((c) => c.id === activeCategory)?.label ??
+        "All ingredients";
 
   return (
     <div className={styles.wrapper}>
@@ -86,18 +166,48 @@ export default function IngredientSelector({
       </div>
 
       {/* Category tabs */}
-      <div className={styles.tabs}>
+      <div
+        ref={tabsRef}
+        className={styles.tabs}
+        role="tablist"
+        aria-label="Ingredient categories"
+        tabIndex={0}
+        onMouseDown={handleTabsMouseDown}
+        onMouseMove={handleTabsMouseMove}
+        onMouseUp={handleTabsMouseUp}
+        onMouseLeave={handleTabsMouseLeave}
+        onWheel={handleTabsWheel}
+        onKeyDown={handleTabsKeyDown}
+      >
         <button
-          className={`${styles.tab} ${activeCategory === "all" ? styles.tabActive : ""}`}
-          onClick={() => handleCategoryClick("all")}
+          type="button"
+          role="tab"
+          aria-selected={activeCategory === "featured"}
+          className={`${styles.tab} ${
+            activeCategory === "featured" ? styles.tabActive : ""
+          }`}
+          onClick={() => {
+            if (isDraggingRef.current) return;
+            setActiveCategory("featured");
+            setSearch("");
+          }}
         >
-          All
+          ⭐ Featured
         </button>
         {INGREDIENT_CATEGORIES.map((cat) => (
           <button
             key={cat.id}
-            className={`${styles.tab} ${activeCategory === cat.id ? styles.tabActive : ""}`}
-            onClick={() => handleCategoryClick(cat.id)}
+            type="button"
+            role="tab"
+            aria-selected={activeCategory === cat.id}
+            className={`${styles.tab} ${
+              activeCategory === cat.id ? styles.tabActive : ""
+            }`}
+            onClick={() => {
+              if (isDraggingRef.current) return;
+              setActiveCategory(cat.id);
+              setSearch("");
+            }}
           >
             {cat.icon} {cat.label}
           </button>
@@ -108,8 +218,6 @@ export default function IngredientSelector({
       <p className={styles.sectionLabel}>
         {search
           ? `${filtered.length} result${filtered.length !== 1 ? "s" : ""} for "${search}"`
-          : activeCategory === "all"
-          ? "All ingredients"
           : activeCategoryLabel}
       </p>
 
@@ -150,6 +258,7 @@ export default function IngredientSelector({
           >
             <span className={styles.trayCount}>
               <span className={styles.trayCountBadge}>{selectedCount}</span>
+              {" "}
               ingredient{selectedCount !== 1 ? "s" : ""} selected
             </span>
             <span className={styles.trayToggle}>

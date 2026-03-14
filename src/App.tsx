@@ -72,6 +72,14 @@ function App() {
 
   const handleAuthSuccess = (authUser: User) => {
     setUser(authUser)
+    // Demo-only bypass: if we created a synthetic user (no real Supabase session),
+    // skip onboarding/profile persistence and continue the UI flow.
+    if (authUser.id.startsWith('demo-')) {
+      setProfile(null)
+      setView('input')
+      return
+    }
+
     setView('onboarding')
     setProfile(null)
     fetchProfile(authUser.id).then((p) => {

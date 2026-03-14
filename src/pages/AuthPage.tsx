@@ -10,6 +10,17 @@ export interface AuthPageProps {
   onSuccess: (user: User) => void
 }
 
+function isDuplicateRegistrationError(message: string): boolean {
+  const m = message.toLowerCase()
+  return (
+    m.includes('already registered') ||
+    m.includes('already exists') ||
+    m.includes('user already registered') ||
+    m.includes('user already exists') ||
+    m.includes('duplicate')
+  )
+}
+
 function checkPasswordRequirements(password: string) {
   return {
     length: password.length >= 8,
@@ -43,7 +54,25 @@ export function AuthPage({ onBack, onSuccess }: AuthPageProps) {
       if (mode === 'signup') {
         const { data, error } = await supabase.auth.signUp({ email, password })
         setLoading(false)
-        if (error) { setAuthError(error.message); return }
+        if (error) {
+          // Demo mode: don't block the flow for duplicate accounts.
+          // If the backend rejects a duplicate email, treat it as a successful registration
+          // and proceed to the next screen without showing an error.
+          if (isDuplicateRegistrationError(error.message)) {
+            const demoUser = {
+              id: `demo-${crypto.randomUUID()}`,
+              email,
+              app_metadata: {},
+              user_metadata: { name },
+              aud: 'authenticated',
+              created_at: new Date().toISOString(),
+            } as unknown as User
+            onSuccess(demoUser)
+            return
+          }
+          setAuthError(error.message)
+          return
+        }
         if (!data.session) {
           alert('Account created! Check your email to confirm, then sign in.')
           switchMode('signin')
