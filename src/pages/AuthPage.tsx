@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { User } from '@supabase/supabase-js'
 import styles from './AuthPage.module.css'
 import { supabase } from '@/lib/supabase'
 
@@ -6,7 +7,7 @@ type AuthMode = 'signin' | 'signup'
 
 export interface AuthPageProps {
   onBack: () => void
-  onSuccess: () => void
+  onSuccess: (user: User) => void
 }
 
 function checkPasswordRequirements(password: string) {
@@ -38,29 +39,32 @@ export function AuthPage({ onBack, onSuccess }: AuthPageProps) {
     setAuthError(null)
     setLoading(true)
 
-    if (mode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({ email, password })
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({ email, password })
+        setLoading(false)
+        if (error) { setAuthError(error.message); return }
+        if (!data.session) {
+          alert('Account created! Check your email to confirm, then sign in.')
+          switchMode('signin')
+          return
+        }
+        onSuccess(data.session.user)
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+        setLoading(false)
+        if (error) { setAuthError(error.message); return }
+        if (data.user) {
+          onSuccess(data.user)
+        } else if (data.session?.user) {
+          onSuccess(data.session.user)
+        } else {
+          setAuthError('Sign-in succeeded but no user returned. Please try again.')
+        }
+      }
+    } catch (err) {
       setLoading(false)
-      if (error) {
-        setAuthError(error.message)
-        return
-      }
-      if (!data.session) {
-        alert('Account created! Check your email to confirm, then sign in.')
-        switchMode('signin')
-        return
-      }
-      onSuccess()
-    } else {
-      const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password })
-      console.log('[PrepBrain] signInWithPassword result:', { data: signInData, error })
-      setLoading(false)
-      if (error) {
-        setAuthError(error.message)
-        return
-      }
-      console.log('[PrepBrain] Sign-in success, calling onSuccess()')
-      onSuccess()
+      setAuthError(err instanceof Error ? err.message : 'Unexpected error')
     }
   }
 

@@ -37,17 +37,17 @@ function App() {
   const [profile, setProfile] = useState<CafeProfile | null>(null)
   const prepDataRef = useRef<PrepPayload | null>(null)
 
-  // On mount: check for existing session and route accordingly
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.user) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user)
+        fetchProfile(session.user.id).then((p) => {
+          setProfile(p)
+          setView(p ? 'input' : 'onboarding')
+        }).catch(() => setView('onboarding'))
+      } else {
         setView('landing')
-        return
       }
-      setUser(session.user)
-      const p = await fetchProfile(session.user.id)
-      setProfile(p)
-      setView(p ? 'input' : 'onboarding')
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -58,7 +58,7 @@ function App() {
           setView('landing')
           return
         }
-        if (event === 'SIGNED_IN') {
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
           setUser(session.user)
           const p = await fetchProfile(session.user.id)
           setProfile(p)
@@ -70,22 +70,14 @@ function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  const handleAuthSuccess = async () => {
-    console.log('[PrepBrain] handleAuthSuccess called')
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    console.log('[PrepBrain] getSession result:', { session, sessionError })
-    if (!session?.user) {
-      console.log('[PrepBrain] No session found after auth — cannot navigate')
-      return
-    }
-    console.log('[PrepBrain] User:', session.user.email)
-    setUser(session.user)
-    const p = await fetchProfile(session.user.id)
-    console.log('[PrepBrain] Profile fetched:', p)
-    setProfile(p)
-    const nextView = p ? 'input' : 'onboarding'
-    console.log('[PrepBrain] Navigating to:', nextView)
-    setView(nextView)
+  const handleAuthSuccess = (authUser: User) => {
+    setUser(authUser)
+    setView('onboarding')
+    setProfile(null)
+    fetchProfile(authUser.id).then((p) => {
+      setProfile(p)
+      setView(p ? 'input' : 'onboarding')
+    }).catch(() => setView('onboarding'))
   }
 
   const handleOnboardingComplete = (p: CafeProfile) => {
@@ -159,7 +151,6 @@ function App() {
     return <OnboardingPage userId={user.id} onComplete={handleOnboardingComplete} />
   }
 
-  // Main app (user is signed in)
   return (
     <div
       style={{

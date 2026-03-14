@@ -6,4 +6,10 @@ export default defineConfig({
   resolve: {
     alias: { '@': '/src' },
   },
+  server: {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+    },
+  },
 })
