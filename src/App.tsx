@@ -15,8 +15,10 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { LandingPage } from '@/pages/LandingPage'
 import { runSession } from '@/lib/session'
 import { RecipeDetailView } from '@/components/RecipeDetailView'
+import ShareMenuPage from '@/pages/ShareMenuPage'
 
-type AppView = 'landing' | 'input' | 'output' | 'auth' | 'onboarding' | 'profile' | 'recipe-detail'
+
+type AppView = 'landing' | 'input' | 'output' | 'auth' | 'onboarding' | 'profile' | 'recipe-detail' | 'share-menu'
 
 async function fetchProfile(userId: string): Promise<CafeProfile | null> {
   console.log('[FETCH_PROFILE] Starting fetch for user:', userId)
@@ -333,6 +335,7 @@ function App() {
           onRemoveSaved={handleRemoveSaved}
           onRemoveApproved={handleRemoveApproved}
           onNavigateToAuth={user ? () => setView('profile') : () => setView('auth')}
+          onNavigateToShareMenu={() => setView('share-menu')}  
           onViewRecipe={handleViewRecipe}
           user={user}
           profile={profile}
@@ -363,6 +366,15 @@ function App() {
               recipe={selectedRecipe}
               type={selectedRecipeType}
               onBack={handleBackFromRecipe}
+            />
+          )}
+          {view === 'share-menu' && (
+            <ShareMenuPage
+              savedRecipes={savedRecipes}
+              approvedRecipes={approvedRecipes}
+              cafeId={profile?.id ?? 'unknown-cafe'}
+              onBack={() => setView('input')}
+              onDone={() => setView('input')}
             />
           )}
         </main>

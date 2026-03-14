@@ -141,3 +141,48 @@
   text-decoration: underline;
   color: var(--color-primary-dark);
 }
+
+/* Add these to your existing Sidebar.module.css */
+
+.shareDescription {
+  font-size: 13px;
+  color: var(--cream-muted, #6B6860);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.shareDescription strong {
+  color: var(--cream, #F0EAD6);
+  font-weight: 600;
+}
+
+.shareBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1.5px solid var(--accent, #C8A96E);
+  background: transparent;
+  color: var(--accent, #C8A96E);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  justify-content: center;
+}
+
+.shareBtn:hover {
+  background: rgba(200, 169, 110, 0.12);
+}
+
+.shareBtn:active {
+  transform: scale(0.98);
+}
+
+.shareBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -9,25 +9,37 @@ interface SidebarProps {
   onRemoveSaved?: (index: number) => void
   onRemoveApproved?: (index: number) => void
   onNavigateToAuth?: () => void
+  onNavigateToShareMenu?: () => void   // ← NEW: navigates to menu picker page
   onViewRecipe?: (recipe: Dish, type: 'saved' | 'approved') => void
   user?: User | null
   profile?: CafeProfile | null
 }
 
-export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemoveApproved, onNavigateToAuth, onViewRecipe, user, profile }: SidebarProps) {
+export function Sidebar({
+  savedRecipes,
+  approvedRecipes,
+  onRemoveSaved,
+  onRemoveApproved,
+  onNavigateToAuth,
+  onNavigateToShareMenu,
+  onViewRecipe,
+  user,
+  profile,
+}: SidebarProps) {
   const accountLabel = user
     ? (profile?.cafe_name ?? user.email ?? 'Your account')
     : 'Sign in or create an account'
-  
+
   const handleAccountClick = () => {
-    console.log('[SIDEBAR] Account clicked, calling onNavigateToAuth')
-    if (onNavigateToAuth) {
-      onNavigateToAuth()
-    }
+    if (onNavigateToAuth) onNavigateToAuth()
   }
-  
+
+  const totalRecommended = savedRecipes.length + approvedRecipes.length
+
   return (
     <aside className={styles.sidebar} aria-label="Sidebar">
+
+      {/* Approved recipes */}
       <div className={styles.section}>
         <h2 className={styles.sectionTitle}>Approved recipes</h2>
         {approvedRecipes.length === 0 ? (
@@ -36,7 +48,7 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
           <ul className={styles.list}>
             {approvedRecipes.map((recipe, index) => (
               <li key={`approved-${recipe.name}-${index}`}>
-                <div 
+                <div
                   className={`${styles.item} ${onViewRecipe ? styles.itemClickable : ''}`}
                   onClick={() => onViewRecipe?.(recipe, 'approved')}
                   role={onViewRecipe ? 'button' : undefined}
@@ -50,7 +62,7 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
                     <button
                       type="button"
                       className={styles.removeBtn}
-                      onClick={(e) => { e.stopPropagation(); onRemoveApproved(index); }}
+                      onClick={(e) => { e.stopPropagation(); onRemoveApproved(index) }}
                       title="Remove from approved"
                       aria-label={`Remove ${recipe.name} from approved`}
                     >
@@ -63,6 +75,8 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
           </ul>
         )}
       </div>
+
+      {/* Saved recipes */}
       <div className={styles.section}>
         <h2 className={styles.sectionTitle}>Saved recipes</h2>
         {savedRecipes.length === 0 ? (
@@ -71,7 +85,7 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
           <ul className={styles.list}>
             {savedRecipes.map((recipe, index) => (
               <li key={`${recipe.name}-${index}`}>
-                <div 
+                <div
                   className={`${styles.item} ${onViewRecipe ? styles.itemClickable : ''}`}
                   onClick={() => onViewRecipe?.(recipe, 'saved')}
                   role={onViewRecipe ? 'button' : undefined}
@@ -85,7 +99,7 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
                     <button
                       type="button"
                       className={styles.removeBtn}
-                      onClick={(e) => { e.stopPropagation(); onRemoveSaved(index); }}
+                      onClick={(e) => { e.stopPropagation(); onRemoveSaved(index) }}
                       title="Remove from saved"
                       aria-label={`Remove ${recipe.name} from saved`}
                     >
@@ -98,6 +112,36 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
           </ul>
         )}
       </div>
+
+      {/* ── NEW: Share to customers ─────────────────────────────────────────── */}
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>Share with customers</h2>
+
+        {totalRecommended === 0 ? (
+          <p className={styles.empty}>
+            No recommendations yet. Generate suggestions first, then share them with your customers.
+          </p>
+        ) : (
+          <>
+            <p className={styles.shareDescription}>
+              You have <strong>{totalRecommended}</strong> recommended dish
+              {totalRecommended !== 1 ? 'es' : ''}. Pick 3 to share with
+              customers and let them vote for today's special.
+            </p>
+            <button
+              type="button"
+              className={styles.shareBtn}
+              onClick={() => onNavigateToShareMenu?.()}
+              disabled={!onNavigateToShareMenu}
+            >
+              <ShareIcon />
+              Choose 3 to share →
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Account */}
       <div className={styles.section}>
         <h2 className={styles.sectionTitle}>Account</h2>
         <div
@@ -108,11 +152,23 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
           onKeyDown={onNavigateToAuth ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleAccountClick() } : undefined}
         >
           <p className={styles.accountText}>{accountLabel}</p>
-          <span className={styles.accountLink}>
-            Account settings
-          </span>
+          <span className={styles.accountLink}>Account settings</span>
         </div>
       </div>
+
     </aside>
+  )
+}
+
+function ShareIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
   )
 }
