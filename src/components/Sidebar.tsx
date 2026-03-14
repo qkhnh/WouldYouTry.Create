@@ -1,13 +1,20 @@
+import type { User } from '@supabase/supabase-js'
 import type { Dish } from '@/types/suggestion'
+import type { CafeProfile } from '@/types/profile'
 import styles from './Sidebar.module.css'
 
 interface SidebarProps {
   savedRecipes: Dish[]
   onRemoveSaved?: (index: number) => void
   onNavigateToAuth?: () => void
+  user?: User | null
+  profile?: CafeProfile | null
 }
 
-export function Sidebar({ savedRecipes, onRemoveSaved, onNavigateToAuth }: SidebarProps) {
+export function Sidebar({ savedRecipes, onRemoveSaved, onNavigateToAuth, user, profile }: SidebarProps) {
+  const accountLabel = user
+    ? (profile?.cafe_name ?? user.email ?? 'Your account')
+    : 'Sign in or create an account'
   return (
     <aside className={styles.sidebar} aria-label="Sidebar">
       <div className={styles.section}>
@@ -48,7 +55,7 @@ export function Sidebar({ savedRecipes, onRemoveSaved, onNavigateToAuth }: Sideb
           onClick={onNavigateToAuth}
           onKeyDown={onNavigateToAuth ? (e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToAuth() } : undefined}
         >
-          <p className={styles.accountText}>Sign in or create an account</p>
+          <p className={styles.accountText}>{accountLabel}</p>
           <span className={styles.accountLink}>
             Account settings
           </span>

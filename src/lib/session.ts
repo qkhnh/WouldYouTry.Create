@@ -1,5 +1,6 @@
 import type { Dish } from '@/types/suggestion'
 import type { SubmittedIngredient } from '@/pages/PrepPage'
+import type { CafeProfile } from '@/types/profile'
 
 // ── Default cafe profile (hardcoded until OnboardingView is built) ─────────────
 
@@ -8,15 +9,26 @@ const DEFAULT_PANTRY = ['olive oil', 'salt', 'pepper', 'garlic', 'onion', 'butte
 
 // ── buildPrompt ────────────────────────────────────────────────────────────────
 
-export function buildPrompt(ingredients: SubmittedIngredient[], notes: string): string {
+export function buildPrompt(
+  ingredients: SubmittedIngredient[],
+  notes: string,
+  profile?: CafeProfile | null
+): string {
+  const equipment = (profile?.equipment?.length ? profile.equipment : DEFAULT_EQUIPMENT).join(', ')
+  const pantry = profile?.pantry_staples?.length
+    ? profile.pantry_staples.map((p) => p.name).join(', ')
+    : DEFAULT_PANTRY.join(', ')
   const ingredientList = ingredients
     .map((i) => `- ${i.name}${i.qty ? ` (${i.qty}${i.unit ? ' ' + i.unit : ''})` : ''}${i.atRisk ? ' [AT RISK]' : ''}`)
     .join('\n')
+  const profileContext = profile
+    ? `Cafe: ${profile.cafe_name ?? 'unnamed'} | Style: ${profile.cuisine_type ?? 'general'}\n`
+    : ''
 
   return `You are a chef assistant for a cafe. Suggest 3 creative off-menu dishes using the available ingredients.
 
-Available equipment: ${DEFAULT_EQUIPMENT.join(', ')}
-Pantry staples available: ${DEFAULT_PANTRY.join(', ')}
+${profileContext}Available equipment: ${equipment}
+Pantry staples available: ${pantry}
 
 Today's leftover ingredients:
 ${ingredientList}
@@ -215,11 +227,11 @@ export function rankDishes(scored: Dish[]): Dish[] {
 
 // ── runSession ─────────────────────────────────────────────────────────────────
 
-export async function runSession(payload: {
-  ingredients: SubmittedIngredient[]
-  notes: string
-}): Promise<Dish[]> {
-  const prompt = buildPrompt(payload.ingredients, payload.notes)
+export async function runSession(
+  payload: { ingredients: SubmittedIngredient[]; notes: string },
+  profile?: CafeProfile | null
+): Promise<Dish[]> {
+  const prompt = buildPrompt(payload.ingredients, payload.notes, profile)
   const raw = await callLLM(prompt, payload.ingredients)
   const parsed = parseResponse(raw)
   const flagged = flagAtRiskIngredients(parsed, payload.ingredients)
