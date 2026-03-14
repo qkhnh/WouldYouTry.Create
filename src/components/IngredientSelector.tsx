@@ -107,7 +107,6 @@ export default function IngredientSelector({
 
     if (isDraggingRef.current) {
       el.scrollLeft = dragStartScrollLeftRef.current - deltaX;
-      e.preventDefault();
     }
   };
 
@@ -120,7 +119,6 @@ export default function IngredientSelector({
     if (dominantDelta === 0) return;
 
     el.scrollLeft += dominantDelta;
-    e.preventDefault();
   };
 
   const handleTabsKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {

@@ -9,11 +9,12 @@ interface SidebarProps {
   onRemoveSaved?: (index: number) => void
   onRemoveApproved?: (index: number) => void
   onNavigateToAuth?: () => void
+  onViewRecipe?: (recipe: Dish, type: 'saved' | 'approved') => void
   user?: User | null
   profile?: CafeProfile | null
 }
 
-export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemoveApproved, onNavigateToAuth, user, profile }: SidebarProps) {
+export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemoveApproved, onNavigateToAuth, onViewRecipe, user, profile }: SidebarProps) {
   const accountLabel = user
     ? (profile?.cafe_name ?? user.email ?? 'Your account')
     : 'Sign in or create an account'
@@ -35,7 +36,13 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
           <ul className={styles.list}>
             {approvedRecipes.map((recipe, index) => (
               <li key={`approved-${recipe.name}-${index}`}>
-                <div className={styles.item}>
+                <div 
+                  className={`${styles.item} ${onViewRecipe ? styles.itemClickable : ''}`}
+                  onClick={() => onViewRecipe?.(recipe, 'approved')}
+                  role={onViewRecipe ? 'button' : undefined}
+                  tabIndex={onViewRecipe ? 0 : undefined}
+                  onKeyDown={onViewRecipe ? (e) => { if (e.key === 'Enter' || e.key === ' ') onViewRecipe(recipe, 'approved') } : undefined}
+                >
                   <span className={styles.itemName} title={recipe.name}>
                     {recipe.name}
                   </span>
@@ -43,7 +50,7 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
                     <button
                       type="button"
                       className={styles.removeBtn}
-                      onClick={() => onRemoveApproved(index)}
+                      onClick={(e) => { e.stopPropagation(); onRemoveApproved(index); }}
                       title="Remove from approved"
                       aria-label={`Remove ${recipe.name} from approved`}
                     >
@@ -64,7 +71,13 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
           <ul className={styles.list}>
             {savedRecipes.map((recipe, index) => (
               <li key={`${recipe.name}-${index}`}>
-                <div className={styles.item}>
+                <div 
+                  className={`${styles.item} ${onViewRecipe ? styles.itemClickable : ''}`}
+                  onClick={() => onViewRecipe?.(recipe, 'saved')}
+                  role={onViewRecipe ? 'button' : undefined}
+                  tabIndex={onViewRecipe ? 0 : undefined}
+                  onKeyDown={onViewRecipe ? (e) => { if (e.key === 'Enter' || e.key === ' ') onViewRecipe(recipe, 'saved') } : undefined}
+                >
                   <span className={styles.itemName} title={recipe.name}>
                     {recipe.name}
                   </span>
@@ -72,7 +85,7 @@ export function Sidebar({ savedRecipes, approvedRecipes, onRemoveSaved, onRemove
                     <button
                       type="button"
                       className={styles.removeBtn}
-                      onClick={() => onRemoveSaved(index)}
+                      onClick={(e) => { e.stopPropagation(); onRemoveSaved(index); }}
                       title="Remove from saved"
                       aria-label={`Remove ${recipe.name} from saved`}
                     >

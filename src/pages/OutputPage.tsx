@@ -13,6 +13,7 @@ export interface OutputPageProps {
   errorMessage?: string | null
   onBackToIngredients: () => void
   onSave?: (recipe: Dish) => void
+  onApprove?: (recipe: Dish) => void
   onRetry?: () => void
 }
 
@@ -74,9 +75,11 @@ function ScoreSection({ dish }: { dish: Dish }) {
 function RecipeCard({
   dish,
   onSave,
+  onApprove,
 }: {
   dish: Dish
   onSave?: (recipe: Dish) => void
+  onApprove?: (recipe: Dish) => void
 }) {
   return (
     <article
@@ -115,7 +118,7 @@ function RecipeCard({
         </button>
         <button
           type="button"
-          onClick={() => alert('Approved!')}
+          onClick={() => onApprove?.(dish)}
           style={{
             padding: '0.5rem 1rem',
             fontSize: '0.9375rem',
@@ -155,6 +158,7 @@ export function OutputPage({
   errorMessage,
   onBackToIngredients,
   onSave,
+  onApprove,
   onRetry,
 }: OutputPageProps) {
   return (
@@ -205,6 +209,7 @@ export function OutputPage({
                 key={`${dish.name}-${index}`}
                 dish={dish}
                 onSave={onSave}
+                onApprove={onApprove}
               />
             ))}
           </div>

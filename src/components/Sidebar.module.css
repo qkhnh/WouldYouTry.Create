@@ -59,6 +59,21 @@
   cursor: default;
 }
 
+.itemClickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.itemClickable:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.itemClickable:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 .itemName {
   flex: 1;
   white-space: nowrap;

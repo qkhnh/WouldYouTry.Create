@@ -19,42 +19,64 @@ export function buildPrompt(
     ? profile.pantry_staples.map((p) => p.name).join(', ')
     : DEFAULT_PANTRY.join(', ')
   const ingredientList = ingredients
-    .map((i) => `- ${i.name}${i.qty ? ` (${i.qty}${i.unit ? ' ' + i.unit : ''})` : ''}${i.atRisk ? ' [AT RISK]' : ''}`)
+    .map((i) => `- ${i.name}${i.qty ? ` (${i.qty}${i.unit ? ' ' + i.unit : ''})` : ''}${i.atRisk ? ' [AT RISK - prioritize using this]' : ''}`)
     .join('\n')
   
+  // Enhanced menu items formatting for GLM-5
   const menuItemsFormatted = profile?.menu_items?.length
     ? profile.menu_items.map((item) => {
-        const ingredientsStr = item.ingredients
-          .map((ing) => `${ing.name} ${ing.quantity}${ing.unit}`)
-          .join(', ')
-        return `${item.name}: ${ingredientsStr}`
+        const ingredientsStr = item.ingredients.length > 0
+          ? item.ingredients.map((ing) => `${ing.name} (${ing.quantity}${ing.unit})`).join(', ')
+          : 'no specific ingredients listed'
+        return `  - ${item.name} [${item.category}]: ${ingredientsStr}`
       }).join('\n')
     : ''
 
   const profileContext = profile
-    ? `Cafe: ${profile.cafe_name ?? 'unnamed'} | Style: ${profile.cuisine_type ?? 'general'}\n`
+    ? `CAFE NAME: ${profile.cafe_name ?? 'Unnamed Cafe'}\nCUISINE STYLE: ${profile.cuisine_type ?? 'General'}\n`
     : ''
 
+  // Enhanced menu items section with clear context for LLM search
   const menuItemsSection = menuItemsFormatted
-    ? `\nCurrent menu items:\n${menuItemsFormatted}\n`
+    ? `\n=== EXISTING MENU ITEMS (use as reference for style and ingredient patterns) ===\n${menuItemsFormatted}\n`
     : ''
 
-  return `You are a chef assistant for a cafe. Suggest 3 creative off-menu dishes using the available ingredients.
+  // Build chef notes section
+  const chefNotesSection = notes 
+    ? `\nCHEF NOTES: ${notes}\n` 
+    : ''
 
-${profileContext}Available equipment: ${equipment}
-Pantry staples available: ${pantry}${menuItemsSection}
-Today's leftover ingredients:
-${ingredientList}
+  // GLM-5 optimized prompt with clear step-by-step structure
+  return `You are a professional chef assistant helping a cafe create off-menu specials from leftover ingredients.
 
-${notes ? `Chef notes: ${notes}\n` : ''}
-Respond with ONLY a valid JSON array of exactly 3 objects. Each object must have:
-- name (string)
-- description (string)
-- ingredients (array of { name, quantity, unit })
-- equipmentRequired (array of strings)
-- rationale (string)
-- offMenuNote (string, optional)
-No markdown, no explanation, just the JSON array.`
+=== YOUR TASK ===
+Create exactly 3 creative off-menu dish suggestions that:
+1. Use the available leftover ingredients (prioritize items marked [AT RISK])
+2. Match the cafe's style and equipment capabilities
+3. Can be prepared with available pantry staples
+4. Are different from existing menu items but complement the menu style
+
+=== CAFE PROFILE ===
+${profileContext}AVAILABLE EQUIPMENT: ${equipment}
+PANTRY STAPLES: ${pantry}${menuItemsSection}
+=== TODAY'S LEFTOVER INGREDIENTS ===
+${ingredientList}${chefNotesSection}
+=== OUTPUT REQUIREMENTS ===
+You MUST respond with ONLY a valid JSON array. No markdown, no code blocks, no explanations.
+
+Output format (exactly 3 objects in array):
+[
+  {
+    "name": "Dish Name",
+    "description": "Brief description of the dish",
+    "ingredients": [{"name": "ingredient", "quantity": 1, "unit": "pcs"}],
+    "equipmentRequired": ["stovetop"],
+    "rationale": "Why this dish works",
+    "offMenuNote": "Off-menu special — use while supplies last."
+  }
+]
+
+Now generate the JSON array:`
 }
 
 // ── mockCallLLM (fallback when no API key) ─────────────────────────────────────
@@ -147,11 +169,11 @@ export async function callLLM(
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: 'You are a chef assistant. Return only valid JSON.' },
+          { role: 'system', content: 'You are a professional chef assistant. You MUST respond with ONLY valid JSON arrays, no markdown formatting, no code blocks, no explanations. Start your response directly with [ and end with ].' },
           { role: 'user', content: prompt },
         ],
         temperature: 0.7,
-        max_tokens: 4000,
+        max_tokens: 8000,
       }),
     })
 
@@ -172,7 +194,7 @@ export async function callLLM(
     console.log('GLM API Response:', JSON.stringify(data, null, 2))
 
     const typedData = data as {
-      choices?: Array<{ message?: { content?: string } }>
+      choices?: Array<{ message?: { content?: string; reasoning_content?: string } }>
       error?: { message?: string; code?: number; type?: string }
     }
 
@@ -185,7 +207,8 @@ export async function callLLM(
       throw new Error('GLM API error: No choices in response')
     }
 
-    const content = typedData.choices[0]?.message?.content
+    const message = typedData.choices[0]?.message
+    const content = message?.content || message?.reasoning_content
     if (!content) {
       console.error('GLM API Response - Missing content:', typedData)
       throw new Error('GLM API error: No content returned in message')
