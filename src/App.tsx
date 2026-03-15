@@ -75,6 +75,7 @@ function App() {
   const [selectedRecipe, setSelectedRecipe] = useState<Dish | null>(null)
   const [selectedRecipeType, setSelectedRecipeType] = useState<'saved' | 'approved'>('saved')
   const [authLoading, setAuthLoading] = useState(true)
+  const [profileFetchLoading, setProfileFetchLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const prepDataRef = useRef<PrepPayload | null>(null)
   const initialSessionDoneRef = useRef(false)
@@ -176,12 +177,12 @@ function App() {
       return
     }
 
-    setView('onboarding')
+    setProfileFetchLoading(true)
     setProfile(null)
     fetchProfile(authUser.id).then((p) => {
       setProfile(p)
       setView(p ? 'input' : 'onboarding')
-    }).catch(() => setView('onboarding'))
+    }).catch(() => setView('onboarding')).finally(() => setProfileFetchLoading(false))
   }
 
   const handleOnboardingComplete = (p: CafeProfile) => {
@@ -219,14 +220,6 @@ function App() {
   }
 
   const handleBackToIngredients = () => setView('input')
-
-  const handleSave = (recipe: Dish) => {
-    const alreadySaved = savedRecipes.some((r) => r.name === recipe.name)
-    if (!alreadySaved) setSavedRecipes((prev) => [...prev, recipe])
-    setSuggestions((prev) => prev.filter((r) => r.name !== recipe.name))
-    setSuccessMessage(`"${recipe.name}" saved for later`)
-    setTimeout(() => setSuccessMessage(null), 3000)
-  }
 
   const handleRemoveSaved = (index: number) => {
     setSavedRecipes((prev) => prev.filter((_, i) => i !== index))
@@ -269,7 +262,7 @@ function App() {
     setView('input')
   }
 
-  if (authLoading) {
+  if (authLoading || profileFetchLoading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
         <div style={{ textAlign: 'center' }}>
@@ -356,9 +349,9 @@ function App() {
               suggestions={suggestions}
               errorMessage={errorMessage}
               onBackToIngredients={handleBackToIngredients}
-              onSave={handleSave}
               onApprove={handleApprove}
               onRetry={handleRetry}
+              submittedIngredients={prepDataRef.current?.ingredients}
             />
           )}
           {view === 'recipe-detail' && selectedRecipe && (

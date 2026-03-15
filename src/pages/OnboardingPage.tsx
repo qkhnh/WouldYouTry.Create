@@ -173,11 +173,17 @@ export function OnboardingPage({ userId, onComplete }: OnboardingPageProps) {
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
                   style={{ 
-                    paddingLeft: '1rem', 
-                    paddingTop: '0.75rem',
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--color-bg)',
+                    color: 'var(--color-text)',
                     resize: 'vertical',
                     fontFamily: 'inherit',
                     fontSize: '0.9375rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
                   }}
                 />
               </div>

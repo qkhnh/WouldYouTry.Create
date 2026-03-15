@@ -82,7 +82,11 @@ export function AuthPage({ onBack, onSuccess }: AuthPageProps) {
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         setLoading(false)
-        if (error) { setAuthError(error.message); return }
+        if (error) {
+          console.error('[AUTH] Sign-in error:', error.message, error.status)
+          setAuthError(error.message)
+          return
+        }
         if (data.user) {
           onSuccess(data.user)
         } else if (data.session?.user) {

@@ -264,6 +264,29 @@ export function parseResponse(raw: string | Dish[]): Dish[] {
   return parsed.map((item: RawDish) => normalizeDish(item))
 }
 
+// ── fuzzyMatchIngredient ──────────────────────────────────────────────────────
+// Match ingredient names with fuzzy logic (handles singular/plural, partial matches)
+
+function fuzzyMatchIngredient(dishIngName: string, submittedNames: Set<string>): boolean {
+  const dishLower = dishIngName.toLowerCase().trim()
+  
+  // Direct match
+  if (submittedNames.has(dishLower)) return true
+  
+  // Check if any submitted name contains the dish ingredient or vice versa
+  for (const submitted of submittedNames) {
+    // Handle singular/plural and partial matches
+    if (dishLower.includes(submitted) || submitted.includes(dishLower)) return true
+    
+    // Handle common variations (e.g., "bacon" vs "bacon bits")
+    const dishWords = dishLower.split(/\s+/)
+    const submittedWords = submitted.split(/\s+/)
+    if (dishWords.some(w => submittedWords.includes(w))) return true
+  }
+  
+  return false
+}
+
 // ── flagAtRiskIngredients ──────────────────────────────────────────────────────
 
 export function flagAtRiskIngredients(
@@ -271,15 +294,46 @@ export function flagAtRiskIngredients(
   submitted: SubmittedIngredient[]
 ): Dish[] {
   const atRiskNames = new Set(
-    submitted.filter((i) => i.atRisk).map((i) => i.name.toLowerCase())
+    submitted.filter((i) => i.atRisk).map((i) => i.name.toLowerCase().trim())
   )
+  
   return dishes.map((dish) => ({
     ...dish,
     ingredients: dish.ingredients.map((ing) => ({
       ...ing,
-      atRisk: atRiskNames.has(ing.name.toLowerCase()),
+      atRisk: fuzzyMatchIngredient(ing.name, atRiskNames),
     })),
   }))
+}
+
+// ── findSubmittedIngredient ──────────────────────────────────────────────────
+// Find a submitted ingredient by fuzzy matching the name
+
+function findSubmittedIngredient(
+  ingName: string,
+  submittedMap: Map<string, SubmittedIngredient>
+): SubmittedIngredient | undefined {
+  const ingLower = ingName.toLowerCase().trim()
+  
+  // Direct match
+  if (submittedMap.has(ingLower)) {
+    return submittedMap.get(ingLower)
+  }
+  
+  // Fuzzy match - check if any key contains or is contained by the ingredient name
+  for (const [key, value] of submittedMap) {
+    if (key.includes(ingLower) || ingLower.includes(key)) {
+      return value
+    }
+    // Check word-level matches
+    const keyWords = key.split(/\s+/)
+    const ingWords = ingLower.split(/\s+/)
+    if (keyWords.some(w => ingWords.includes(w))) {
+      return value
+    }
+  }
+  
+  return undefined
 }
 
 // ── calculateWasteScore ────────────────────────────────────────────────────────
@@ -289,7 +343,7 @@ export function calculateWasteScore(
   dish: Dish,
   submitted: SubmittedIngredient[]
 ): number {
-  const submittedMap = new Map(submitted.map((i) => [i.name.toLowerCase(), i]))
+  const submittedMap = new Map(submitted.map((i) => [i.name.toLowerCase().trim(), i]))
 
   const atRiskUsed = dish.ingredients.filter((ing) => ing.atRisk)
   if (atRiskUsed.length === 0) return 0
@@ -298,7 +352,7 @@ export function calculateWasteScore(
   let counted = 0
 
   for (const ing of atRiskUsed) {
-    const src = submittedMap.get(ing.name.toLowerCase())
+    const src = findSubmittedIngredient(ing.name, submittedMap)
     if (!src) continue
     const available = parseFloat(src.qty)
     if (!available || available <= 0) continue
@@ -322,21 +376,21 @@ export function calculatePortions(
   dish: Dish,
   submitted: SubmittedIngredient[]
 ): number {
-  const submittedMap = new Map(submitted.map((i) => [i.name.toLowerCase(), i]))
+  const submittedMap = new Map(submitted.map((i) => [i.name.toLowerCase().trim(), i]))
 
   const atRiskUsed = dish.ingredients.filter((ing) => ing.atRisk && ing.quantity > 0)
   if (atRiskUsed.length === 0) {
     // No at-risk ingredients — estimate from total submitted qty
     const anyIng = dish.ingredients[0]
     if (!anyIng) return 1
-    const src = submittedMap.get(anyIng.name.toLowerCase())
+    const src = findSubmittedIngredient(anyIng.name, submittedMap)
     if (!src || !parseFloat(src.qty)) return 1
     return Math.max(1, Math.floor(parseFloat(src.qty) / anyIng.quantity))
   }
 
   let minPortions = Infinity
   for (const ing of atRiskUsed) {
-    const src = submittedMap.get(ing.name.toLowerCase())
+    const src = findSubmittedIngredient(ing.name, submittedMap)
     if (!src) continue
     const available = parseFloat(src.qty)
     if (!available) continue
