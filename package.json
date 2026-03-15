@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://qkhnh.github.io/PrepBrain",
+  "homepage": "https://qkhnh.github.io/WouldYouTry.Create/",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
