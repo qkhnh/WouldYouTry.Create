@@ -1,0 +1,14 @@
+<!-- Seamless tiling pattern: brighter green line art, clean and sharp (reference-style) -->
+<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
+  <g fill="none" stroke="#1E885B" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="8" cy="8" r="4"/>
+    <ellipse cx="28" cy="28" rx="4" ry="8"/>
+    <path d="M48 14 Q52 22 48 30 Q44 22 48 14"/>
+    <circle cx="20" cy="14" r="3"/>
+    <path d="M4 36 L7 30 L10 36 Z"/>
+    <ellipse cx="44" cy="38" rx="3.5" ry="5"/>
+    <circle cx="14" cy="44" r="3"/>
+    <path d="M36 8 L38 4 L40 8 L38 12 Z"/>
+    <path d="M52 44 Q54 48 52 52 Q50 48 52 44"/>
+  </g>
+</svg>
