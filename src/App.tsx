@@ -18,11 +18,10 @@ import { RecipeDetailView } from '@/components/RecipeDetailView'
 import ShareMenuPage from '@/pages/ShareMenuPage'
 import Cookies from 'js-cookie'
 
-
-
 type AppView = 'landing' | 'input' | 'output' | 'auth' | 'onboarding' | 'profile' | 'recipe-detail' | 'share-menu'
-const COOKIE_OPTS = { expires: 7 } // persist for 7 days
- 
+
+const COOKIE_OPTS = { expires: 7 }
+
 function readCookie<T>(key: string, fallback: T): T {
   try {
     const raw = Cookies.get(key)
@@ -31,73 +30,86 @@ function readCookie<T>(key: string, fallback: T): T {
     return fallback
   }
 }
- 
+
 function writeCookie<T>(key: string, value: T): void {
   try {
     Cookies.set(key, JSON.stringify(value), COOKIE_OPTS)
   } catch {
-    // Cookie may exceed 4KB limit with large recipe lists — silent fail
+    // Cookie may exceed 4KB limit — silent fail
   }
 }
- 
+
 function clearCookie(key: string): void {
   Cookies.remove(key)
 }
 
-async function fetchProfile(userId: string): Promise<CafeProfile | null> {
+// ── CHANGE 1: profile cookie helpers ─────────────────────────────────────────
+function readProfileCookie(): CafeProfile | null {
+  return readCookie<CafeProfile | null>('prepbrain-profile', null)
+}
+
+function writeProfileCookie(p: CafeProfile): void {
+  writeCookie('prepbrain-profile', p)
+}
+
+function clearProfileCookie(): void {
+  clearCookie('prepbrain-profile')
+}
+
+// ── CHANGE 2: fetchProfile now accepts cached fallback + timeout increased to 30s
+async function fetchProfile(userId: string, cached: CafeProfile | null = null): Promise<CafeProfile | null> {
   console.log('[FETCH_PROFILE] Starting fetch for user:', userId)
-  
-  // Add timeout to prevent hanging
+
   const timeoutPromise = new Promise<null>((_, reject) => {
-    setTimeout(() => reject(new Error('Profile fetch timeout')), 10000)
+    setTimeout(() => reject(new Error('Profile fetch timeout')), 30000) // was 10000
   })
-  
+
   try {
     const fetchPromise = supabase
       .from('cafe_profiles')
       .select('*')
       .eq('user_id', userId)
       .single()
-    
+
     const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as {
       data: CafeProfile | null
       error: { message: string; code: string } | null
     }
-    
+
     console.log('[FETCH_PROFILE] Result:', { data, error })
-    
+
     if (error) {
       console.log('[FETCH_PROFILE] Error:', error.message, error.code)
-      // PGRST116 = no rows found, which is fine for new users
       if (error.code === 'PGRST116') {
         console.log('[FETCH_PROFILE] No profile exists yet (new user)')
         return null
       }
-      return null
+      // On other errors fall back to cached profile instead of null
+      console.log('[FETCH_PROFILE] Falling back to cached profile')
+      return cached
     }
     if (!data) {
-      console.log('[FETCH_PROFILE] No data returned')
-      return null
+      console.log('[FETCH_PROFILE] No data returned, falling back to cached')
+      return cached
     }
     console.log('[FETCH_PROFILE] Success, returning profile')
     return data as CafeProfile
   } catch (err) {
-    console.error('[FETCH_PROFILE] Exception:', err)
-    return null
+    console.error('[FETCH_PROFILE] Exception (timeout?):', err)
+    // On timeout return cached profile instead of null — prevents onboarding flash
+    console.log('[FETCH_PROFILE] Returning cached profile after exception')
+    return cached
   }
 }
 
 function App() {
   const [view, setView] = useState<AppView>('landing')
   const [status, setStatus] = useState<OutputStatus>('success')
-  // const [suggestions, setSuggestions] = useState<Dish[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  // const [savedRecipes, setSavedRecipes] = useState<Dish[]>(() => readCookie<Dish[]>('prepbrain-saved', []))
+
   const [savedRecipes, setSavedRecipesRaw] = useState<Dish[]>(() =>
     readCookie<Dish[]>('prepbrain-saved', [])
   )
-
-  // const [approvedRecipes, setApprovedRecipes] = useState<Dish[]>([])
   const [approvedRecipes, setApprovedRecipesRaw] = useState<Dish[]>(() =>
     readCookie<Dish[]>('prepbrain-approved', [])
   )
@@ -106,7 +118,19 @@ function App() {
   )
 
   const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<CafeProfile | null>(null)
+
+  // ── CHANGE 3: profile state now initialises from cookie ───────────────────
+  const [profile, setProfileRaw] = useState<CafeProfile | null>(() =>
+    readProfileCookie()
+  )
+
+  // ── CHANGE 4: profile setter writes/clears cookie automatically ───────────
+  const setProfile = (p: CafeProfile | null) => {
+    setProfileRaw(p)
+    if (p) writeProfileCookie(p)
+    else clearProfileCookie()
+  }
+
   const [selectedRecipe, setSelectedRecipe] = useState<Dish | null>(null)
   const [selectedRecipeType, setSelectedRecipeType] = useState<'saved' | 'approved'>('saved')
   const [authLoading, setAuthLoading] = useState(true)
@@ -120,7 +144,7 @@ function App() {
       return next
     })
   }
- 
+
   const setApprovedRecipes = (val: Dish[] | ((prev: Dish[]) => Dish[])) => {
     setApprovedRecipesRaw(prev => {
       const next = typeof val === 'function' ? val(prev) : val
@@ -128,7 +152,7 @@ function App() {
       return next
     })
   }
- 
+
   const setSuggestions = (val: Dish[] | ((prev: Dish[]) => Dish[])) => {
     setSuggestionsRaw(prev => {
       const next = typeof val === 'function' ? val(prev) : val
@@ -137,23 +161,18 @@ function App() {
     })
   }
 
-
   const prepDataRef = useRef<PrepPayload | null>(null)
   const initialSessionDoneRef = useRef(false)
 
   useEffect(() => {
     let mounted = true
 
-    // Check for existing session on mount - just set loading state
-    // The actual profile fetch will be handled by INITIAL_SESSION event
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return
-      // If no session, stop loading and show landing
       if (!session?.user) {
         setAuthLoading(false)
         initialSessionDoneRef.current = true
       }
-      // If session exists, INITIAL_SESSION event will handle the rest
     }).catch(() => {
       if (mounted) {
         setAuthLoading(false)
@@ -164,21 +183,21 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('[AUTH] State change:', event, session?.user?.email, 'initialSessionDone:', initialSessionDoneRef.current)
-        
+
         if (event === 'SIGNED_OUT' || !session?.user) {
           setUser(null)
           setProfile(null)
           setView('landing')
-          // Don't reset initialSessionDone - we're past initial load
           return
         }
-        
-        // Handle INITIAL_SESSION - this is when REST API is ready
+
+        // ── CHANGE 5: pass cached profile to fetchProfile in INITIAL_SESSION ─
         if (event === 'INITIAL_SESSION' && session?.user) {
           console.log('[AUTH] Initial session, fetching profile...')
           setUser(session.user)
           try {
-            const p = await fetchProfile(session.user.id)
+            const cached = readProfileCookie()
+            const p = await fetchProfile(session.user.id, cached)
             console.log('[AUTH] Profile fetch result:', p ? 'found' : 'not found')
             if (p) {
               setProfile(p)
@@ -188,19 +207,27 @@ function App() {
             }
           } catch (err) {
             console.error('[AUTH] Profile fetch error:', err)
-            setView('onboarding')
+            // ── CHANGE 6: on catch, use cached profile before falling to onboarding
+            const cached = readProfileCookie()
+            if (cached) {
+              setProfile(cached)
+              setView('input')
+            } else {
+              setView('onboarding')
+            }
           }
           setAuthLoading(false)
           initialSessionDoneRef.current = true
           return
         }
-        
-        // Handle SIGNED_IN only if INITIAL_SESSION already happened (i.e., user signed out and back in)
+
+        // ── CHANGE 7: pass cached profile to fetchProfile in SIGNED_IN ───────
         if (event === 'SIGNED_IN' && initialSessionDoneRef.current && session?.user) {
           console.log('[AUTH] Re-sign-in after initial load, fetching profile...')
           setUser(session.user)
           try {
-            const p = await fetchProfile(session.user.id)
+            const cached = readProfileCookie()
+            const p = await fetchProfile(session.user.id, cached)
             console.log('[AUTH] Profile fetch result:', p ? 'found' : 'not found')
             if (p) {
               setProfile(p)
@@ -210,11 +237,16 @@ function App() {
             }
           } catch (err) {
             console.error('[AUTH] Profile fetch error:', err)
-            setView('onboarding')
+            const cached = readProfileCookie()
+            if (cached) {
+              setProfile(cached)
+              setView('input')
+            } else {
+              setView('onboarding')
+            }
           }
         }
-        
-        // Handle token refresh - just update user, don't re-fetch profile
+
         if (event === 'TOKEN_REFRESHED' && session?.user) {
           console.log('[AUTH] Token refreshed, updating user')
           setUser(session.user)
@@ -230,20 +262,22 @@ function App() {
 
   const handleAuthSuccess = (authUser: User) => {
     setUser(authUser)
-    // Demo-only bypass: if we created a synthetic user (no real Supabase session),
-    // skip onboarding/profile persistence and continue the UI flow.
     if (authUser.id.startsWith('demo-')) {
       setProfile(null)
       setView('input')
       return
     }
-
     setProfileFetchLoading(true)
     setProfile(null)
-    fetchProfile(authUser.id).then((p) => {
+    const cached = readProfileCookie()
+    fetchProfile(authUser.id, cached).then((p) => {
       setProfile(p)
       setView(p ? 'input' : 'onboarding')
-    }).catch(() => setView('onboarding')).finally(() => setProfileFetchLoading(false))
+    }).catch(() => {
+      const c = readProfileCookie()
+      if (c) { setProfile(c); setView('input') }
+      else setView('onboarding')
+    }).finally(() => setProfileFetchLoading(false))
   }
 
   const handleOnboardingComplete = (p: CafeProfile) => {
@@ -256,10 +290,18 @@ function App() {
     setView('input')
   }
 
+  // ── CHANGE 8: sign out clears profile cookie too ──────────────────────────
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     setUser(null)
     setProfile(null)
+    setSavedRecipes([])
+    setApprovedRecipes([])
+    setSuggestions([])
+    clearCookie('prepbrain-saved')
+    clearCookie('prepbrain-approved')
+    clearCookie('prepbrain-suggestions')
+    clearProfileCookie()
     setView('landing')
   }
 
@@ -269,7 +311,6 @@ function App() {
     setStatus('loading')
     setSuggestions([])
     setErrorMessage(null)
-
     try {
       const dishes = await runSession(data, profile)
       setSuggestions(dishes.length > 0 ? dishes : [])
@@ -347,32 +388,14 @@ function App() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--color-bg)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      {/* Success toast notification */}
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
       {successMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '1rem',
-            right: '1rem',
-            padding: '0.75rem 1.25rem',
-            background: 'var(--color-primary)',
-            color: '#fff',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            fontSize: '0.9375rem',
-            fontWeight: 500,
-            zIndex: 1000,
-            animation: 'slideIn 0.3s ease-out',
-          }}
-        >
+        <div style={{
+          position: 'fixed', top: '1rem', right: '1rem',
+          padding: '0.75rem 1.25rem', background: 'var(--color-primary)', color: '#fff',
+          borderRadius: 'var(--radius-md)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          fontSize: '0.9375rem', fontWeight: 500, zIndex: 1000, animation: 'slideIn 0.3s ease-out',
+        }}>
           {successMessage}
         </div>
       )}
@@ -389,7 +412,7 @@ function App() {
           onRemoveSaved={handleRemoveSaved}
           onRemoveApproved={handleRemoveApproved}
           onNavigateToAuth={user ? () => setView('profile') : () => setView('auth')}
-          onNavigateToShareMenu={() => setView('share-menu')}  
+          onNavigateToShareMenu={() => setView('share-menu')}
           onViewRecipe={handleViewRecipe}
           user={user}
           profile={profile}
