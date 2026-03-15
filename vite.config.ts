@@ -12,6 +12,6 @@ export default defineConfig({
   //     'Pragma': 'no-cache',
   //   },
   // },
-  base: '/PrepBrain/',         
+  base: '/WouldYouTry.Create/',         
 
 })
