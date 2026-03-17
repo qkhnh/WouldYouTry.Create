@@ -66,4 +66,14 @@ WouldYouTry.create allows café owners to:
   - Save generated dishes  
   - Approve dishes for use  
 
-- Approved dishes can be pushed to the social platform (**WouldYouTry**)  
+- Approved dishes can be pushed to the social platform (**WouldYouTry**)
+
+##  Related Projects
+
+- [WouldYouTry.Create](https://reynardtj.github.io/WouldYouTry/) – Dedicated social platform
+
+
+##  Note
+
+This repository contains **only the AI dish generation tool (WouldYouTry.Create)**.  
+The dedicated social platform (**WouldYouTry**) is developed separately.
